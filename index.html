@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2c3e50">
+    <title>Cancionero Juvenil v7.0</title>
+
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { --p: #2c3e50; --s: #27ae60; --a: #f39c12; --d: #e74c3c; --l: #ffffff; --bg: #f4f7f6; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; color: #333; padding-bottom: 70px; }
+        
+        /* Estilos idénticos a la v6.1 */
+        .logo-main { width: 140px; margin-bottom: 20px; }
+        .logo-mini { width: 35px; height: 35px; object-fit: contain; position: absolute; top: 10px; right: 15px; border-radius: 50%; border: 1px solid #ddd; }
+        #gatekeeper { position: fixed; inset: 0; background: var(--p); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; padding: 20px; text-align: center; }
+        nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; z-index: 500; height: 65px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+        nav button { flex: 1; border: none; background: none; font-size: 11px; font-weight: bold; color: #999; cursor: pointer; transition: 0.3s; }
+        nav button.active { color: var(--p); border-top: 4px solid var(--p); }
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .song-display { background: white; color: black; padding: 25px; border-radius: 12px; border: 1px solid #eee; font-family: 'Fira Code', monospace; line-height: 1.6; min-height: 300px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .mode-instru .song-display { font-size: clamp(11px, 2.5vw, 15px); column-width: 280px; column-gap: 30px; }
+        .mode-canto .song-display { font-size: clamp(14px, 3vw, 18px); white-space: pre-wrap; }
+        .toolbar { display: flex; gap: 5px; background: #f1f1f1; padding: 8px; border-radius: 8px 8px 0 0; border: 1px solid #ccc; overflow-x: auto; }
+        .editor-box { background: white; border: 1px solid #ccc; min-height: 200px; padding: 15px; font-family: 'Fira Code', monospace; outline: none; border-radius: 0 0 8px 8px; white-space: pre-wrap; margin-bottom: 15px;}
+        .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; cursor: pointer; }
+        .btn { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin: 5px 0; }
+        .btn-ok { background: var(--p); color: white; }
+        .btn-action { background: var(--s); color: white; }
+        .btn-cancel { background: #eee; color: #555; }
+        .tag { font-size: 10px; background: #e8f4f8; padding: 4px 8px; border-radius: 4px; color: var(--p); font-weight: bold; }
+        input, select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        #pdf-container { display: none; background: white; padding: 20px; font-family: 'Fira Code', monospace; }
+        .log-box { font-size: 11px; background: #eee; padding: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body class="mode-canto">
+
+<div id="gatekeeper">
+    <img src="https://img.icons8.com/clouds/200/catholic-church.png" class="logo-main">
+    <h2>Coro Juvenil Parroquial</h2>
+    <input type="password" id="pass-entrada" placeholder="Contraseña...">
+    <button onclick="checkAccess()" class="btn btn-ok" style="width:200px">Entrar</button>
+</div>
+
+<div class="container" id="main-content" style="display:none">
+    <div id="sec-songs" class="section active">
+        <h3>📚 Repertorio</h3>
+        <input type="text" id="search" placeholder="🔍 Buscar..." onkeyup="renderSongsList()">
+        <select id="filter-style" onchange="renderSongsList()"></select>
+        <div style="display:flex; gap:5px">
+            <button class="admin-only btn btn-ok" onclick="openSongForm()">+ Nueva</button>
+            <button class="instru-only btn btn-action" onclick="generateAllPDF()">📄 PDF Todo</button>
+        </div>
+        <div id="list-songs"></div>
+    </div>
+
+    <div id="sec-misas" class="section">
+        <h3>💒 Misas</h3>
+        <div id="list-misas"></div>
+        <button class="admin-only btn btn-ok" onclick="createNewMisa()">+ Nueva Misa</button>
+    </div>
+
+    <div id="sec-misa-detail" class="section">
+        <button onclick="showSection('misas')" class="btn btn-cancel" style="width:auto">⬅ Volver</button>
+        <h2 id="misa-name"></h2>
+        <div class="instru-only" style="display:flex; gap:5px">
+            <button class="btn btn-action" onclick="generateMisaPDF('list')">Lista</button>
+            <button class="btn btn-action" onclick="generateMisaPDF('both')">Lista + Letras</button>
+        </div>
+        <div id="misa-songs-order"></div>
+        <div class="admin-only" style="background:#fff; padding:15px; border-radius:10px; border:1px solid #ddd">
+            <h4>Añadir Canto</h4>
+            <select id="song-to-add"></select>
+            <button onclick="addSongToMisa()" class="btn btn-ok">Añadir</button>
+            <button onclick="deleteMisa()" class="btn" style="color:red; background:none">Eliminar Misa</button>
+        </div>
+    </div>
+
+    <div id="sec-view-song" class="section">
+        <button onclick="goBack()" class="btn btn-cancel" style="width:auto">⬅ Volver</button>
+        <div style="display:flex; justify-content:space-between; align-items:center">
+            <h2 id="v-title"></h2>
+            <button class="instru-only btn btn-action" onclick="downloadSinglePDF()" style="width:auto">📄 PDF</button>
+        </div>
+        <span id="v-tag" class="tag"></span> <span id="v-cejilla" class="tag instru-only" style="background:var(--a); color:white"></span>
+        <div id="v-content" class="song-display" style="margin-top:15px"></div>
+        <div class="admin-only">
+            <button class="btn" onclick="editSong()" style="background:var(--a); color:white">✏️ Editar</button>
+            <button class="btn" onclick="deleteSong()" style="background:none; color:red">🗑️ Eliminar</button>
+        </div>
+    </div>
+
+    <div id="sec-form-song" class="section">
+        <h3>Editor de Canción</h3>
+        <input type="text" id="f-title" placeholder="Título">
+        <div style="display:flex; gap:10px">
+            <select id="f-style" style="flex:2"></select>
+            <input type="number" id="f-cejilla" placeholder="Cejilla" style="flex:1">
+        </div>
+        <label>Versión Cantantes (Limpia)</label>
+        <div id="f-content-canto" class="editor-box" contenteditable="true"></div>
+        <label>Versión Instrumentos (Acordes)</label>
+        <div id="f-content-instru" class="editor-box" contenteditable="true"></div>
+        <button onclick="saveSong()" class="btn btn-ok">💾 Guardar en la Nube</button>
+        <button onclick="showSection('songs')" class="btn btn-cancel">Cancelar</button>
+    </div>
+
+    <div id="sec-settings" class="section">
+        <h3>⚙️ Ajustes</h3>
+        <p id="mode-status"></p>
+        <div class="instru-only">
+            <button onclick="loginAdmin()" id="btn-login-admin" class="btn btn-ok">Modo Administrador</button>
+            <button onclick="logoutAdmin()" id="btn-logout-admin" class="btn btn-cancel" style="display:none">Cerrar Admin</button>
+        </div>
+        <div class="admin-only" style="margin-top:20px">
+            <h4>Registro (Logs)</h4>
+            <div id="activity-log" class="log-box"></div>
+        </div>
+    </div>
+</div>
+
+<nav id="nav-bar" style="display:none">
+    <button id="tab-songs" onclick="showSection('songs')" class="active">CANCIONES</button>
+    <button id="tab-misas" onclick="showSection('misas')">MISAS</button>
+    <button id="tab-settings" onclick="showSection('settings')">AJUSTES</button>
+</nav>
+
+<div id="pdf-container"></div>
+
+<script>
+    // --- CONFIGURACIÓN FIREBASE ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyCm_U5XkQZ5nJ-stzmIYEZXpMUUwLFf4EE",
+        authDomain: "cancionero-juvenil-parroquial.firebaseapp.com",
+        projectId: "cancionero-juvenil-parroquial",
+        storageBucket: "cancionero-juvenil-parroquial.firebasestorage.app",
+        messagingSenderId: "1013357948678",
+        appId: "1:1013357948678:web:15bb29840934e793aa3887",
+        measurementId: "G-NFRZGNHTQ6",
+        databaseURL: "https://cancionero-juvenil-parroquial-default-rtdb.firebaseio.com/"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // --- VARIABLES DE ESTADO ---
+    let songs = [];
+    let misas = [];
+    let styles = ["Entrada", "Piedad", "Gloria", "Salmo", "Aleluya", "Ofertorio", "Santo", "Paz", "Comunión", "Salida"];
+    let logs = [];
+    let viewMode = 'canto';
+    let currentUser = null;
+    let currentMisaIdx = null;
+    let currentSongIdx = null;
+    const admins = { "1111": "Guitarra", "2222": "Piano" };
+
+    // --- SINCRONIZACIÓN EN TIEMPO REAL ---
+    db.ref('data').on('value', (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+            songs = val.songs || [];
+            misas = val.misas || [];
+            logs = val.logs || [];
+            renderSongsList();
+            renderMisas();
+            renderActivity();
+            updateMisaSongSelector();
+            if(currentMisaIdx !== null) renderMisaSongs();
+        }
+    });
+
+    // --- ACCESO ---
+    function checkAccess() {
+        const p = document.getElementById('pass-entrada').value;
+        if(p === "canto2024") { viewMode = 'canto'; enterApp(); }
+        else if(p === "instru2024") { viewMode = 'instru'; enterApp(); }
+        else { alert("Contraseña incorrecta"); }
+    }
+
+    function enterApp() {
+        document.body.className = 'mode-' + viewMode;
+        document.getElementById('gatekeeper').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        document.getElementById('nav-bar').style.display = 'flex';
+        document.getElementById('mode-status').innerText = "Modo: " + (viewMode==='instru'?'Instrumentos':'Cantantes');
+        updateSelects();
+        updateUI();
+    }
+
+    // --- GUARDADO ---
+    function sync() {
+        db.ref('data').set({ songs, misas, logs });
+    }
+
+    function addLog(m) {
+        logs.unshift(`${new Date().toLocaleTimeString()} | ${currentUser || "Sistema"}: ${m}`);
+        if(logs.length > 20) logs.pop();
+        sync();
+    }
+
+    // --- LÓGICA DE CANCIONES ---
+    function renderSongsList() {
+        const q = document.getElementById('search').value.toLowerCase();
+        const f = document.getElementById('filter-style').value;
+        const list = document.getElementById('list-songs');
+        list.innerHTML = "";
+        songs.forEach((s, idx) => {
+            if(s.title.toLowerCase().includes(q) && (f === "Todos" || s.style === f)) {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `<b>${s.title}</b> <span class="tag">${s.style}</span>`;
+                div.onclick = () => viewSong(idx, 'songs');
+                list.appendChild(div);
+            }
+        });
+    }
+
+    function viewSong(idx, from) {
+        currentSongIdx = idx;
+        const s = songs[idx];
+        document.getElementById('v-title').innerText = s.title;
+        document.getElementById('v-tag').innerText = s.style;
+        document.getElementById('v-cejilla').innerText = "Cejilla: " + (s.cejilla || 0);
+        document.getElementById('v-content').innerHTML = (viewMode === 'instru') ? (s.contentInstru || s.contentCanto) : s.contentCanto;
+        showSection('view-song');
+    }
+
+    function saveSong() {
+        const t = document.getElementById('f-title').value;
+        if(!t) return;
+        const s = {
+            title: t,
+            style: document.getElementById('f-style').value,
+            cejilla: document.getElementById('f-cejilla').value || 0,
+            contentCanto: document.getElementById('f-content-canto').innerHTML,
+            contentInstru: document.getElementById('f-content-instru').innerHTML
+        };
+        if(currentSongIdx !== null) songs[currentSongIdx] = s; else songs.push(s);
+        addLog("Guardó canción: " + t);
+        showSection('songs');
+    }
+
+    function deleteSong() {
+        if(confirm("¿Borrar definitivamente?")) {
+            addLog("Borró: " + songs[currentSongIdx].title);
+            songs.splice(currentSongIdx, 1);
+            sync();
+            showSection('songs');
+        }
+    }
+
+    // --- LÓGICA DE MISAS ---
+    function renderMisas() {
+        const list = document.getElementById('list-misas');
+        list.innerHTML = "";
+        misas.forEach((m, idx) => {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `<b>${m.name}</b> <span class="tag">${m.items ? m.items.length : 0} cantos</span>`;
+            div.onclick = () => openMisaDetail(idx);
+            list.appendChild(div);
+        });
+    }
+
+    function openMisaDetail(idx) {
+        currentMisaIdx = idx;
+        document.getElementById('misa-name').innerText = misas[idx].name;
+        renderMisaSongs();
+        showSection('misa-detail');
+    }
+
+    function renderMisaSongs() {
+        const cont = document.getElementById('misa-songs-order');
+        cont.innerHTML = "";
+        const m = misas[currentMisaIdx];
+        if(!m.items) m.items = [];
+        m.items.forEach((sIdx, pos) => {
+            const s = songs[sIdx];
+            if(!s) return;
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `<div>• <b>${s.title}</b> <span class="tag">${s.style}</span></div>
+                            <button class="admin-only" onclick="removeFromMisa(${pos})" style="background:none; border:none; color:red">✖</button>`;
+            div.onclick = (e) => { if(e.target.tagName !== 'BUTTON' && !currentUser) viewSong(sIdx, 'misa-detail'); };
+            cont.appendChild(div);
+        });
+    }
+
+    function createNewMisa() {
+        const n = prompt("Nombre de la Misa:");
+        if(n) { misas.push({ name: n, items: [] }); addLog("Creó misa: " + n); }
+    }
+
+    function addSongToMisa() {
+        const sIdx = document.getElementById('song-to-add').value;
+        if(!misas[currentMisaIdx].items) misas[currentMisaIdx].items = [];
+        misas[currentMisaIdx].items.push(parseInt(sIdx));
+        sync();
+    }
+
+    function removeFromMisa(pos) {
+        misas[currentMisaIdx].items.splice(pos, 1);
+        sync();
+    }
+
+    function deleteMisa() {
+        if(confirm("¿Borrar misa completa?")) {
+            misas.splice(currentMisaIdx, 1);
+            sync();
+            showSection('misas');
+        }
+    }
+
+    // --- PDF ---
+    const pdfOpts = { margin: 10, filename: 'cancionero.pdf', html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+    
+    function buildSongHTML(s) {
+        let content = viewMode === 'instru' ? (s.contentInstru || s.contentCanto) : s.contentCanto;
+        let col = viewMode === 'instru' ? 'column-count:2;' : '';
+        return `<div style="page-break-inside:avoid; margin-bottom:40px;">
+                    <h2>${s.title}</h2>
+                    <p style="font-size:12px; color:#666">${s.style} | Cejilla: ${s.cejilla}</p>
+                    <div style="${col} font-family:monospace; white-space:pre-wrap;">${content}</div>
+                </div><hr>`;
+    }
+
+    function downloadSinglePDF() {
+        const c = document.getElementById('pdf-container');
+        c.innerHTML = buildSongHTML(songs[currentSongIdx]);
+        c.style.display = 'block';
+        html2pdf().set(pdfOpts).from(c).save().then(() => c.style.display = 'none');
+    }
+
+    function generateMisaPDF(type) {
+        const c = document.getElementById('pdf-container');
+        let h = `<h1>${misas[currentMisaIdx].name}</h1>`;
+        if(type==='list' || type==='both') {
+            h += "<ul>" + misas[currentMisaIdx].items.map(i => `<li>${songs[i].title}</li>`).join("") + "</ul>";
+        }
+        if(type==='both') {
+            h += "<div style='page-break-after:always'></div>";
+            misas[currentMisaIdx].items.forEach(i => h += buildSongHTML(songs[i]));
+        }
+        c.innerHTML = h; c.style.display = 'block';
+        html2pdf().set(pdfOpts).from(c).save().then(() => c.style.display = 'none');
+    }
+
+    function generateAllPDF() {
+        const c = document.getElementById('pdf-container');
+        let h = "<h1>Cancionero Completo</h1>";
+        styles.forEach(est => {
+            let filtered = songs.filter(s => s.style === est);
+            if(filtered.length) {
+                h += `<h2>Sección: ${est}</h2>`;
+                filtered.forEach(s => h += buildSongHTML(s));
+            }
+        });
+        c.innerHTML = h; c.style.display = 'block';
+        html2pdf().set(pdfOpts).from(c).save().then(() => c.style.display = 'none');
+    }
+
+    // --- UI INTERFAZ ---
+    function showSection(id) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('sec-' + id).classList.add('active');
+        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        let tabId = id; 
+        if(id==='view-song' || id==='form-song') tabId = 'songs';
+        if(id==='misa-detail') tabId = 'misas';
+        document.getElementById('tab-' + tabId).classList.add('active');
+    }
+
+    function updateSelects() {
+        const optStyle = styles.map(s => `<option value="${s}">${s}</option>`).join("");
+        document.getElementById('f-style').innerHTML = optStyle;
+        document.getElementById('filter-style').innerHTML = `<option value="Todos">Todos</option>${optStyle}`;
+    }
+
+    function updateMisaSongSelector() {
+        const sel = document.getElementById('song-to-add');
+        if(sel) sel.innerHTML = songs.map((s, i) => `<option value="${i}">${s.title}</option>`).join("");
+    }
+
+    function updateUI() {
+        const isAdmin = currentUser !== null;
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
+        document.querySelectorAll('.instru-only').forEach(el => el.style.display = viewMode === 'instru' ? 'inline-block' : 'none');
+        document.getElementById('btn-login-admin').style.display = isAdmin ? 'none' : 'block';
+        document.getElementById('btn-logout-admin').style.display = isAdmin ? 'block' : 'none';
+    }
+
+    function loginAdmin() {
+        const p = prompt("PIN:");
+        if(admins[p]) { currentUser = admins[p]; addLog("Login Admin"); updateUI(); }
+    }
+    function logoutAdmin() { currentUser = null; updateUI(); }
+
+    function openSongForm(idx = null) {
+        currentSongIdx = idx;
+        if(idx !== null) {
+            const s = songs[idx];
+            document.getElementById('f-title').value = s.title;
+            document.getElementById('f-cejilla').value = s.cejilla;
+            document.getElementById('f-content-canto').innerHTML = s.contentCanto;
+            document.getElementById('f-content-instru').innerHTML = s.contentInstru;
+        } else {
+            document.getElementById('f-title').value = "";
+            document.getElementById('f-cejilla').value = 0;
+            document.getElementById('f-content-canto').innerHTML = "";
+            document.getElementById('f-content-instru').innerHTML = "";
+        }
+        showSection('form-song');
+    }
+
+    function editSong() { openSongForm(currentSongIdx); }
+    function renderActivity() {
+        const logBox = document.getElementById('activity-log');
+        if(logBox) logBox.innerHTML = logs.map(l => `<div>${l}</div>`).join("");
+    }
+    function goBack() { showSection('songs'); }
+</script>
+</body>
+</html>
