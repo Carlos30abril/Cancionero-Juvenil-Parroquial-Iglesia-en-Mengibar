@@ -113,6 +113,7 @@
         <div id="f-content-instru" class="editor-box" contenteditable="true"></div>
         <button onclick="saveSong()" class="btn btn-ok">💾 Sincronizar Nube</button>
         <button onclick="showSection('songs')" class="btn btn-cancel">Cancelar</button>
+        <button onclick="deleteSong()" class="admin-only btn" style="background:none; color:red; margin-top:20px; border:1px solid red">Eliminar Canción Permanentemente</button>
     </div>
 
     <div id="sec-settings" class="section">
@@ -124,6 +125,10 @@
             <button onclick="logoutAdmin()" id="btn-logout-admin" class="btn btn-cancel" style="display:none">Cerrar Edición</button>
         </div>
     </div>
+
+    <div class="admin-only" style="margin-top:20px; text-align:left; border-top:1px solid #ccc; pt-15px">
+    <h4>📜 Historial (Últimos 15)</h4>
+    <div id="log-list" style="font-size:12px; color:#666; max-height:200px; overflow-y:auto; background:#eee; padding:10px; border-radius:8px"></div>
 
 </div>
     
@@ -256,9 +261,33 @@
     }
 
     function saveSong() {
-        const s = { title: document.getElementById('f-title').value, style: document.getElementById('f-style').value, cejilla: document.getElementById('f-cejilla').value, contentCanto: document.getElementById('f-content-canto').innerHTML, contentInstru: document.getElementById('f-content-instru').innerHTML };
-        if(currentSongIdx!==null) songs[currentSongIdx]=s; else songs.push(s);
-        sync(); showSection('songs');
+    const title = document.getElementById('f-title').value;
+    const s = { 
+        title: title, 
+        style: document.getElementById('f-style').value, 
+        cejilla: document.getElementById('f-cejilla').value, 
+        contentCanto: document.getElementById('f-content-canto').innerHTML, 
+        contentInstru: document.getElementById('f-content-instru').innerHTML 
+    };
+
+    let action = "";
+    if(currentSongIdx!==null) {
+        songs[currentSongIdx] = s;
+        action = `Editó "${title}"`;
+    } else {
+        songs.push(s);
+        action = `Creó "${title}"`;
+    }
+
+    // Registrar Log
+    logs.push({
+        user: currentUser || "Desconocido",
+        action: action,
+        date: new Date().toLocaleString()
+    });
+
+    sync(); 
+    showSection('songs');
     }
 
     function renderMisas() {
@@ -272,15 +301,41 @@
     }
 
     function renderMisaSongs() {
-        const c = document.getElementById('misa-songs-order'); c.innerHTML = "";
-        const m = misas[currentMisaIdx]; if(!m.items) m.items = [];
-        m.items.forEach((sIdx, pos) => {
-            const s = songs[sIdx]; if(!s) return;
-            const d = document.createElement('div'); d.className = 'card';
-            d.innerHTML = `• ${s.title} <button class="admin-only" onclick="removeFromMisa(${pos})" style="color:red; background:none; border:none">✖</button>`;
-            d.onclick = (e) => { if(e.target.tagName!=='BUTTON') { currentSongIdx=sIdx; viewSong(sIdx); }};
-            c.appendChild(d);
-        });
+    const c = document.getElementById('misa-songs-order'); 
+    c.innerHTML = "";
+    const m = misas[currentMisaIdx]; 
+    if(!m.items) m.items = [];
+
+    m.items.forEach((sIdx, pos) => {
+        const s = songs[sIdx]; 
+        if(!s) return;
+        const d = document.createElement('div'); 
+        d.className = 'card';
+        // Añadimos un atributo de datos para que Sortable sepa qué índice es
+        d.setAttribute('data-id', pos); 
+        d.innerHTML = `<div><span class="admin-only" style="cursor:grab; margin-right:10px;">☰</span> • ${s.title}</div>
+                       <button class="admin-only" onclick="removeFromMisa(${pos})" style="color:red; background:none; border:none; font-size:18px">✖</button>`;
+        d.onclick = (e) => { if(e.target.tagName!=='BUTTON' && e.target.innerText !== '☰') { currentSongIdx=sIdx; viewSong(sIdx); }};
+        c.appendChild(d);
+    });
+
+    // --- ACTIVAR ARRASTRAR Y SOLTAR ---
+    if(currentUser) { // Solo si es admin
+        new Sortable(c, {
+            animation: 150,
+            handle: '.admin-only', // Se arrastra desde el icono ☰
+            onEnd: () => {
+                const newOrder = [];
+                // Re-calculamos el orden basado en cómo han quedado los elementos
+                c.querySelectorAll('.card').forEach(el => {
+                    const oldPos = el.getAttribute('data-id');
+                    newOrder.push(m.items[oldPos]);
+                });
+                misas[currentMisaIdx].items = newOrder;
+                sync(); // Guardamos en Firebase
+                }
+            });
+        }
     }
 
     function addSongToMisa() { misas[currentMisaIdx].items.push(parseInt(document.getElementById('song-to-add').value)); sync(); }
@@ -405,7 +460,51 @@
         }
         showSection('form-song');
     }
+    
     function editSong() { openSongForm(currentSongIdx); }
+
+    // Función para mostrar los logs en la UI
+    function renderLogs() {
+    const container = document.getElementById('log-list');
+    if(!container) return;
+    container.innerHTML = logs.slice(-15).reverse().map(l => 
+        `<div style="margin-bottom:5px; border-bottom:1px solid #ddd; padding-bottom:3px">
+            <b>${l.user}</b>: ${l.action} <br> <small>${l.date}</small>
+        </div>`
+    ).join("");
+    }
+
+    function deleteSong() {
+    if(currentSongIdx === null) return;
+    
+    if(confirm("¿Estás SEGURO de eliminar esta canción? Se quitará de todas las misas donde aparezca.")) {
+        const deletedIdx = currentSongIdx;
+        
+        // 1. Registrar en el log
+        logs.push({
+            user: currentUser,
+            action: `Eliminó "${songs[deletedIdx].title}"`,
+            date: new Date().toLocaleString()
+        });
+
+        // 2. Limpiar las misas (quitar la canción y ajustar índices superiores)
+        misas.forEach(m => {
+            if(m.items) {
+                // Quitamos la canción de la lista
+                m.items = m.items.filter(id => id !== deletedIdx);
+                // Bajamos un número a los IDs que eran mayores al borrado para que no se descuadren
+                m.items = m.items.map(id => id > deletedIdx ? id - 1 : id);
+            }
+        });
+
+        // 3. Eliminar del array principal
+        songs.splice(deletedIdx, 1);
+        
+        sync();
+        showSection('songs');
+        }
+    }
+    
 </script>
 </body>
 </html>
