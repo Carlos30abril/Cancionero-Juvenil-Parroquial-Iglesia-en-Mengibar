@@ -50,16 +50,35 @@
     <button onclick="checkAccess()" class="btn btn-ok" style="width:200px">Entrar</button>
 </div>
 
+<img src="Logo Coro Juvenil (W).svg" id="app-logo" style="position:fixed; top:15px; right:15px; width:45px; z-index:1000; display:none;">
+
 <div class="container" id="main-content" style="display:none">
     <div id="sec-songs" class="section active">
         <h3>📚 Repertorio</h3>
-        <input type="text" id="search" placeholder="🔍 Buscar..." onkeyup="renderSongsList()">
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <input type="text" id="search" placeholder="🔍 Buscar..." onkeyup="renderSongsList()" style="margin:0; flex:2;">
+            <select id="filter-style" onchange="renderSongsList()" style="margin:0; flex:1;">
+                <option value="Todos">Todos</option>
+            </select>
+        </div>
         <div style="display:flex; gap:5px">
             <button class="admin-only btn btn-ok" onclick="openSongForm()">+ Nueva</button>
             <button class="btn btn-action" onclick="generateAllPDF()">📄 PDF Completo</button>
         </div>
         <div id="list-songs"></div>
     </div>
+
+    <div id="sec-settings" class="section">
+        <h3>⚙️ Ajustes</h3>
+        <p id="mode-status"></p>
+        <button onclick="logoutApp()" class="btn btn-cancel" style="border: 1px solid #ccc; margin-bottom: 20px;">🚪 Cerrar Sesión</button>
+        
+        <div class="instru-only">
+            <button onclick="loginAdmin()" id="btn-login-admin" class="btn btn-ok">Modo Edición</button>
+            <button onclick="logoutAdmin()" id="btn-logout-admin" class="btn btn-cancel" style="display:none">Cerrar Edición</button>
+        </div>
+    </div>
+</div>
 
     <div id="sec-misas" class="section">
         <h3>⛪ Misas</h3>
@@ -153,11 +172,39 @@
         const v = snap.val(); if(v){ songs=v.songs||[]; misas=v.misas||[]; logs=v.logs||[]; renderSongsList(); renderMisas(); updateMisaSongSelector(); if(currentMisaIdx!==null) renderMisaSongs(); }
     });
 
+    // --- LÓGICA DE SESIÓN (RECUERDA Y CIERRA A LAS 00:00) ---
+    function getTodayString() {
+        return new Date().toLocaleDateString(); // Devuelve la fecha actual, ej: "31/3/2026"
+    }
+
+    function checkSavedSession() {
+        const savedMode = localStorage.getItem('coroViewMode');
+        const savedDate = localStorage.getItem('coroDate');
+        
+        // Si hay sesión guardada y es del mismo día, entra directo
+        if(savedMode && savedDate === getTodayString()) {
+            viewMode = savedMode;
+            enterApp();
+        }
+    }
+
     function checkAccess() {
         const p = document.getElementById('pass-entrada').value;
-        if(p === PASS_CANTO) { viewMode = 'canto'; enterApp(); }
-        else if(p === PASS_INSTRU) { viewMode = 'instru'; enterApp(); }
+        if(p === PASS_CANTO) { viewMode = 'canto'; saveSessionAndEnter(); }
+        else if(p === PASS_INSTRU) { viewMode = 'instru'; saveSessionAndEnter(); }
         else alert("Clave incorrecta");
+    }
+
+    function saveSessionAndEnter() {
+        localStorage.setItem('coroViewMode', viewMode);
+        localStorage.setItem('coroDate', getTodayString());
+        enterApp();
+    }
+
+    function logoutApp() {
+        localStorage.removeItem('coroViewMode');
+        localStorage.removeItem('coroDate');
+        location.reload(); // Recarga la página para volver a pedir contraseña
     }
 
     function enterApp() {
@@ -165,9 +212,38 @@
         document.getElementById('gatekeeper').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
         document.getElementById('nav-bar').style.display = 'flex';
+        document.getElementById('app-logo').style.display = 'block'; // Muestra el logo
         document.getElementById('mode-status').innerText = "Viendo como: " + viewMode;
         updateSelects(); updateUI();
     }
+
+    // --- FILTROS Y BÚSQUEDA ---
+    function updateSelects() {
+        const ops = styles.map(s => `<option value="${s}">${s}</option>`).join("");
+        document.getElementById('f-style').innerHTML = ops;
+        document.getElementById('filter-style').innerHTML = `<option value="Todos">Todos</option>` + ops;
+    }
+
+    function renderSongsList() {
+        const q = document.getElementById('search').value.toLowerCase();
+        const f = document.getElementById('filter-style').value; // Lee el filtro
+        const list = document.getElementById('list-songs'); list.innerHTML = "";
+        
+        songs.forEach((s, i) => {
+            const matchSearch = s.title.toLowerCase().includes(q);
+            const matchStyle = (f === "Todos" || s.style === f);
+            
+            if(matchSearch && matchStyle) {
+                const d = document.createElement('div'); d.className = 'card';
+                d.innerHTML = `<b>${s.title}</b> <span class="tag">${s.style}</span>`;
+                d.onclick = () => { currentSongIdx=i; viewSong(i); };
+                list.appendChild(d);
+            }
+        });
+    }
+
+    // Ejecutamos la comprobación de sesión nada más cargar
+    checkSavedSession();
 
     function sync() { db.ref('data').set({ songs, misas, logs }); }
     function showSection(id) {
@@ -178,18 +254,6 @@
         document.getElementById('tab-'+t).classList.add('active');
     }
 
-    function renderSongsList() {
-        const q = document.getElementById('search').value.toLowerCase();
-        const list = document.getElementById('list-songs'); list.innerHTML = "";
-        songs.forEach((s, i) => {
-            if(s.title.toLowerCase().includes(q)) {
-                const d = document.createElement('div'); d.className = 'card';
-                d.innerHTML = `<b>${s.title}</b> <span class="tag">${s.style}</span>`;
-                d.onclick = () => { currentSongIdx=i; viewSong(i); };
-                list.appendChild(d);
-            }
-        });
-    }
 
     function viewSong(i) {
         const s = songs[i];
@@ -242,9 +306,7 @@
         document.getElementById('btn-login-admin').style.display = adm ? 'none' : 'block';
         document.getElementById('btn-logout-admin').style.display = adm ? 'block' : 'none';
     }
-    function updateSelects() {
-        document.getElementById('f-style').innerHTML = styles.map(s => `<option value="${s}">${s}</option>`).join("");
-    }
+    
     function updateMisaSongSelector() {
         const s = document.getElementById('song-to-add'); if(s) s.innerHTML = songs.map((x,i) => `<option value="${i}">${x.title}</option>`).join("");
     }
