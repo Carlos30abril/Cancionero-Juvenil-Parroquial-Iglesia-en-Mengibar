@@ -40,7 +40,12 @@
         #pdf-container { display: none; background: white; padding: 20px; font-family: 'Fira Code', monospace; }
         .admin-only { display: none; }
         .instru-only { display: none; }
-        .handle { user-select: none; -webkit-user-drag: none; }
+        .handle { 
+            user-select: none; 
+            -webkit-user-drag: none; 
+            cursor: grab; /* Esto añade el icono de la manita en PC */
+        }
+        
     </style>
 </head>
 <body class="mode-canto">
