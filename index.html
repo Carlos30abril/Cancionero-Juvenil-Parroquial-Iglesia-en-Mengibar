@@ -326,13 +326,13 @@
             d.className = 'card';
             d.setAttribute('data-id', sIdx); // Guardamos el ID real de la canción
 
-            d.innerHTML = 
+            d.innerHTML = `
                 <div style="display:flex; align-items:center;">
                     <span class="admin-only handle" style="cursor:grab; margin-right:10px; padding:5px;">☰</span>
                     <span>${s.title}</span>
                 </div>
                 <button class="admin-only" onclick="removeFromMisa(${pos})" style="color:var(--d); background:none; border:none; font-size:18px; padding:5px;">✖</button>
-            ;
+            `;
 
             // Click para ver canción (solo si no se está arrastrando)
             d.onclick = (e) => {
