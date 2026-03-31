@@ -53,6 +53,7 @@
 <img src="Logo Coro Juvenil (W).svg" id="app-logo" style="position:fixed; top:15px; right:15px; width:45px; z-index:1000; display:none;">
 
 <div class="container" id="main-content" style="display:none">
+    
     <div id="sec-songs" class="section active">
         <h3>📚 Repertorio</h3>
         <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -68,24 +69,11 @@
         <div id="list-songs"></div>
     </div>
 
-    <div id="sec-settings" class="section">
-        <h3>⚙️ Ajustes</h3>
-        <p id="mode-status"></p>
-        <button onclick="logoutApp()" class="btn btn-cancel" style="border: 1px solid #ccc; margin-bottom: 20px;">🚪 Cerrar Sesión</button>
-        
-        <div class="instru-only">
-            <button onclick="loginAdmin()" id="btn-login-admin" class="btn btn-ok">Modo Edición</button>
-            <button onclick="logoutAdmin()" id="btn-logout-admin" class="btn btn-cancel" style="display:none">Cerrar Edición</button>
-        </div>
-    </div>
-</div>
-
     <div id="sec-misas" class="section">
         <h3>⛪ Misas</h3>
         <div id="list-misas"></div>
         <button class="admin-only btn btn-ok" onclick="createNewMisa()">+ Crear Misa</button>
     </div>
-</div>
 
     <div id="sec-misa-detail" class="section">
         <button onclick="showSection('misas')" class="btn btn-cancel" style="width:auto">⬅ Volver</button>
@@ -130,13 +118,15 @@
     <div id="sec-settings" class="section">
         <h3>⚙️ Ajustes</h3>
         <p id="mode-status"></p>
+        <button onclick="logoutApp()" class="btn btn-cancel" style="border: 1px solid #ccc; margin-bottom: 20px;">🚪 Cerrar Sesión</button>
         <div class="instru-only">
             <button onclick="loginAdmin()" id="btn-login-admin" class="btn btn-ok">Modo Edición</button>
             <button onclick="logoutAdmin()" id="btn-logout-admin" class="btn btn-cancel" style="display:none">Cerrar Edición</button>
         </div>
     </div>
-</div>
 
+</div>
+    
 <nav id="nav-bar" style="display:none">
     <button id="tab-songs" onclick="showSection('songs')" class="active">CANCIONES</button>
     <button id="tab-misas" onclick="showSection('misas')">MISAS</button>
