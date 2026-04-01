@@ -49,7 +49,11 @@
         body.dark-mode { background: #000000; color: #e0e0e0; }
         body.dark-mode .card, 
         body.dark-mode .song-display, 
-        body.dark-mode .editor-box, 
+        body.dark-mode .editor-box {
+            background-color: #000000 !important; /* Negro absoluto */
+            border: 1px solid #444444 !important; /* Gris medio (puedes usar #333 si lo quieres más oscuro) */
+            color: #e0e0e0 !important;           /* Texto gris claro para no deslumbrar */
+        }
         body.dark-mode nav, 
         body.dark-mode #log-list, 
         body.dark-mode #pdf-container { background: #1e1e1e !important; color: #e0e0e0 !important; border-color: #333 !important; }
