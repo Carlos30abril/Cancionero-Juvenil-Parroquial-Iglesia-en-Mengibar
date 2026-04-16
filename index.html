@@ -566,92 +566,103 @@
 
 
     async function generateAllPDF() {
-        const p = document.getElementById('pdf-container'); 
-        
-        // 1. Ordenar canciones por estilo y luego por título
-        let contentSongs = [...songs].sort((a, b) => {
-            let styleDiff = styles.indexOf(a.style) - styles.indexOf(b.style);
-            if (styleDiff !== 0) return styleDiff;
-            return a.title.localeCompare(b.title);
-        });
+    const p = document.getElementById('pdf-container');
+    p.innerHTML = ""; // Limpiar antes de empezar
 
-        // Asignar número de orden para los IDs internos
-        contentSongs.forEach((s, index) => s.numeroCanto = index + 1);
+    // 1. Ordenar canciones
+    let contentSongs = [...songs].sort((a, b) => {
+        let styleDiff = styles.indexOf(a.style) - styles.indexOf(b.style);
+        if (styleDiff !== 0) return styleDiff;
+        return a.title.localeCompare(b.title);
+    });
 
-        // 2. Crear el Índice Alfabético con enlaces internos
-        let indexSongs = [...contentSongs].sort((a,b) => a.title.localeCompare(b.title));
-        
-        let h = `
-        <div style="text-align:center; margin-bottom:30px;">
-            <h1>Cancionero Juvenil</h1>
-            <p>Iglesia en Mengíbar</p>
-        </div>
-        <h2>Índice Alfabético</h2>
-        <ul style="column-count: 2; font-size: 14px; line-height: 1.8; list-style-type: none; padding: 0; margin-bottom: 20px;">`;
-        
-        indexSongs.forEach(s => { 
-            // El enlace usa href="#canto-X" para navegación interna en el PDF
-            h += `<li style="margin-bottom: 5px;">
-                    <a href="#canto-${s.numeroCanto}" style="text-decoration:none; color:black; display:block;">
-                        <b>${s.numeroCanto}.</b> ${s.title}
-                    </a>
-                  </li>`; 
-        });
-        
-        h += `</ul><div style="page-break-after:always"></div>`;
+    contentSongs.forEach((s, index) => s.numeroCanto = index + 1);
 
-        // 3. Generar el cuerpo de las canciones
-        let currentStyle = "";
-        contentSongs.forEach(s => {
-            // Forzar salto de página SOLO al cambiar de estilo (Entrada, Salmo, etc.)
-            let pageBreak = "";
-            if (s.style !== currentStyle) { 
-                if (currentStyle !== "") pageBreak = `<div style="page-break-before:always"></div>`; 
-                currentStyle = s.style; 
-            }
+    // --- CONSTRUCCIÓN DEL HTML ---
+    let h = "";
 
-            let c = viewMode === 'instru' ? (s.contentInstru || s.contentCanto) : s.contentCanto;
+    // A. PORTADA
+    h += `
+    <div style="height: 280mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always;">
+        <img src="Logo Coro Juvenil.svg" style="width: 80mm; margin-bottom: 20px;">
+        <h1 style="font-size: 40px; margin: 0;">Cancionero Juvenil</h1>
+        <h2 style="font-size: 24px; color: #555;">Iglesia en Mengíbar</h2>
+    </div>`;
+
+    // B. ÍNDICE (Sin enlaces)
+    let indexSongs = [...contentSongs].sort((a, b) => a.title.localeCompare(b.title));
+    h += `
+    <div style="page-break-after: always; padding: 10mm;">
+        <h2 style="border-bottom: 2px solid #000; padding-bottom: 10px;">Índice Alfabético</h2>
+        <ul style="column-count: 2; font-size: 14px; line-height: 1.8; list-style-type: none; padding: 0;">`;
+    
+    indexSongs.forEach(s => {
+        h += `<li style="margin-bottom: 5px;"><b>${s.numeroCanto}.</b> ${s.title}</li>`;
+    });
+    h += `</ul></div>`;
+
+    // C. CUERPO DE CANCIONES (Una por hoja)
+    contentSongs.forEach(s => {
+        let c = viewMode === 'instru' ? (s.contentInstru || s.contentCanto) : s.contentCanto;
+        
+        h += `
+        <div class="pdf-song-page" style="page-break-after: always; position: relative; min-height: 270mm; padding: 10mm; border-top: 1px solid #eee;">
+            <img src="Logo Coro Juvenil.svg" style="position: absolute; top: 10mm; right: 10mm; width: 20mm; opacity: 0.6;">
             
-            // SE APLICÓ LA CORRECCIÓN AQUÍ: font-size: 12px; y page-break-inside: avoid;
-            h += `
-            ${pageBreak}
-            <div id="canto-${s.numeroCanto}" style="page-break-inside: avoid; display: block; width: 100%; margin-bottom: 30px; padding-top: 10px; border-top: 1px solid #eee;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <span style="font-weight:bold; color:#666; text-transform:uppercase; font-size:11px;">${s.style}</span>
-                    <span style="color:#999; font-size:11px;">Canto #${s.numeroCanto}</span>
-                </div>
-                <h2 style="margin-top:0; color:black;">${s.numeroCanto}. ${s.title}</h2>
-                <div style="white-space:pre-wrap; font-family:'Fira Code', monospace; font-size:12px; color:black;">${c}</div>
-            </div>`;
-        });
+            <div style="margin-bottom: 15px;">
+                <span style="font-weight:bold; color:#666; text-transform:uppercase; font-size:11px;">${s.style}</span>
+            </div>
+            
+            <h2 style="margin-top:0; color:black; font-size: 24px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                ${s.numeroCanto}. ${s.title}
+            </h2>
+            
+            <div style="white-space:pre-wrap; font-family:'Fira Code', monospace; font-size:13px; color:black; line-height: 1.5;">${c}</div>
+        </div>`;
+    });
 
-        p.innerHTML = h; 
-        p.style.display = 'block';
+    p.innerHTML = h;
+    p.style.display = 'block';
 
-        // 4. NUEVA CONFIGURACIÓN DEL PDF
-        const opt = { 
-            margin: [15, 15, 20, 15], 
-            filename: 'Cancionero Joven, Iglesia en Mengibar.pdf', 
-            pagebreak: { mode: ['css', 'avoid-all'] }, // Obliga a respetar los saltos y evitar cortes
-            enableLinks: true,                         // Activa los hipervínculos internos
-            html2canvas: { scale: 2, useCORS: true, logging: false }, 
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true } 
-        };
+    // 4. CONFIGURACIÓN DEL PDF
+    const opt = {
+        margin: [0, 0, 0, 0], // Margen manual en el HTML para control total
+        filename: 'Cancionero_Juvenil_Mengibar.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
 
-        // Generar PDF y añadir números de página
-        html2pdf().set(opt).from(p).toPdf().get('pdf').then(function (pdf) {
-            const totalPages = pdf.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPages; i++) { 
-                pdf.setPage(i); 
-                pdf.setFontSize(10); 
-                pdf.setTextColor(150); 
-                pdf.text('Página ' + i + ' de ' + totalPages, 105, 287, { align: 'center' }); 
-            }
-        }).save().then(() => {
-            p.style.display = 'none';
-            p.innerHTML = ""; // Limpiamos para no saturar memoria
-        });
-    }
+    html2pdf().set(opt).from(p).toPdf().get('pdf').then(function (pdf) {
+        const totalPages = pdf.internal.getNumberOfPages();
+        
+        // El índice suele ocupar 1 página + 1 de portada = empezamos en la 3
+        // Pero para ser exactos, calculamos cuándo empiezan las canciones
+        // En este diseño: Portada (1), Índice (2). Las canciones empiezan en la 3.
+        
+        let actualSongPage = 1;
+        let lastSongTitle = ""; 
+
+        // Empezamos el bucle de páginas físicas
+        for (let i = 1; i <= totalPages; i++) {
+            if (i <= 2) continue; // Saltamos Portada e Índice en el numerado
+
+            pdf.setPage(i);
+            pdf.setFontSize(10);
+            pdf.setTextColor(150);
+
+            // Pie de página: Página X (empezando desde las canciones)
+            // Si quieres que las páginas de una misma canción larga tengan el mismo número:
+            // Es complejo detectar el contenido, así que usaremos el número de página relativa:
+            pdf.text('Página ' + actualSongPage, 105, 287, { align: 'center' });
+            
+            actualSongPage++;
+        }
+    }).save().then(() => {
+        p.style.display = 'none';
+        p.innerHTML = ""; 
+    });
+}
     
     function openSongForm(i=null) {
         currentSongIdx = i;
