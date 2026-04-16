@@ -563,32 +563,61 @@
         p.innerHTML = h; p.style.display='block'; html2pdf().set(optPDF).from(p).save().then(()=>p.style.display='none');
     }
 
+
     async function generateAllPDF() {
-        const p = document.getElementById('pdf-container'); 
-        let contentSongs = [...songs].sort((a, b) => {
-            let styleDiff = styles.indexOf(a.style) - styles.indexOf(b.style);
-            if (styleDiff !== 0) return styleDiff;
-            return a.title.localeCompare(b.title);
-        });
-        contentSongs.forEach((s, index) => s.numeroCanto = index + 1);
-        let indexSongs = [...contentSongs].sort((a,b) => a.title.localeCompare(b.title));
-        let h = `<div style="text-align:center; margin-bottom:30px;"><h1>Cancionero Juvenil</h1><p>Coro Parroquial Mengíbar</p></div><h2>Índice Alfabético</h2><ul style="column-count: 2; font-size: 14px; line-height: 1.8; list-style-type: none; padding: 0;">`;
-        indexSongs.forEach(s => { h += `<li><b>${s.numeroCanto}.</b> ${s.title} <span style="color:#888; font-size:10px;">(${s.style})</span></li>`; });
-        h += `</ul><div style="page-break-after:always"></div>`;
-        let currentStyle = "";
-        contentSongs.forEach(s => {
-            let pageBreak = "";
-            if (s.style !== currentStyle) { if (currentStyle !== "") pageBreak = `<div style="page-break-before:always"></div>`; currentStyle = s.style; }
-            let c = viewMode==='instru' ? (s.contentInstru||s.contentCanto) : s.contentCanto;
-            h += `${pageBreak}<div style="page-break-inside:avoid; position:relative; margin-bottom:40px;"><div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--p); padding-bottom:5px; margin-bottom:15px;"><span style="font-weight:bold; color:#666; text-transform:uppercase; font-size:12px;">${s.style}</span></div><h2 style="margin-top:0;"><span style="color:var(--s);">${s.numeroCanto}.</span> ${s.title}</h2><div style="white-space:pre-wrap; font-family:'Fira Code', monospace;">${c}</div></div>`;
-        });
-        p.innerHTML = h; p.style.display='block';
-        const opt = { margin: [15, 15, 20, 15], filename: 'Cancionero_Mengibar.pdf', html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
-        html2pdf().set(opt).from(p).toPdf().get('pdf').then(function (pdf) {
-            const totalPages = pdf.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPages; i++) { pdf.setPage(i); pdf.setFontSize(10); pdf.setTextColor(150); pdf.text('Página ' + i, 105, 287, { align: 'center' }); }
-        }).save().then(() => p.style.display='none');
-    }
+    const p = document.getElementById('pdf-container'); 
+    let contentSongs = [...songs].sort((a, b) => {
+        let styleDiff = styles.indexOf(a.style) - styles.indexOf(b.style);
+        if (styleDiff !== 0) return styleDiff;
+        return a.title.localeCompare(b.title);
+    });
+
+    contentSongs.forEach((s, index) => s.numeroCanto = index + 1);
+    let indexSongs = [...contentSongs].sort((a,b) => a.title.localeCompare(b.title));
+
+    // 1. ÍNDICE CON HIPERVÍNCULOS
+    let h = `<div style="text-align:center;"><h1>Cancionero Juvenil</h1><p>Mengíbar</p></div><h2>Índice</h2><ul style="column-count: 2; list-style: none; padding: 0;">`;
+    indexSongs.forEach(s => { 
+        h += `<li><a href="#canto-${s.numeroCanto}" style="text-decoration:none; color:black;"><b>${s.numeroCanto}.</b> ${s.title}</a></li>`; 
+    });
+    h += `</ul><div style="page-break-after:always"></div>`;
+
+    // 2. CONTENIDO CON ANCLAS (ID)
+    let currentStyle = "";
+    contentSongs.forEach(s => {
+        let pageBreak = (s.style !== currentStyle && currentStyle !== "") ? `<div style="page-break-before:always"></div>` : "";
+        currentStyle = s.style;
+        let c = viewMode==='instru' ? (s.contentInstru||s.contentCanto) : s.contentCanto;
+        
+        // Añadimos el id="canto-X" para que el link funcione
+        h += `${pageBreak}<div id="canto-${s.numeroCanto}" style="page-break-inside:avoid; margin-bottom:40px; border-top:1px solid #eee;">
+                <p style="font-size:10px; color:#666;">${s.style}</p>
+                <h2>${s.numeroCanto}. ${s.title}</h2>
+                <div style="white-space:pre-wrap; font-family:monospace;">${c}</div>
+              </div>`;
+    });
+
+    p.innerHTML = h; 
+    p.style.display='block';
+
+    // 3. NOMBRE DEL ARCHIVO PERSONALIZADO
+    const opt = { 
+        margin: [15, 15, 20, 15], 
+        filename: 'Cancionero Joven, Iglesia en Mengibar.pdf', 
+        html2canvas: { scale: 2 }, 
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+    };
+
+    html2pdf().set(opt).from(p).toPdf().get('pdf').then(function (pdf) {
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) { 
+            pdf.setPage(i); 
+            pdf.setFontSize(10); 
+            pdf.setTextColor(150); 
+            pdf.text('Página ' + i, 105, 287, { align: 'center' }); 
+        }
+    }).save().then(() => p.style.display='none');
+}
 
     function openSongForm(i=null) {
         currentSongIdx = i;
